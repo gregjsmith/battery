@@ -513,13 +513,15 @@ battery run <path> [options]
 | `--tag <tag>` / `--filter <expr>` | run only the matching tests | FR-3.3 |
 | `--set <key=value>` | override a variable (repeatable) | FR-5.1 |
 | `--verbosity <quiet\|normal\|verbose>` | set the output level | FR-9.5 |
-| `--report <format>` | write a machine-readable report | FR-9.4 |
-| `--output <path>` | the report file path | FR-9.4 |
+| `--report <format>` | write a machine-readable report (`junit`, `json`, or both) | FR-9.4 |
+| `--output <path>` | the report file or directory | FR-9.4 |
 | `--stop-on-failure` | stop at the first failure | FR-8.3 |
 | `--help` | show usage | FR-10.3 |
 
-The report format is an open question (JUnit XML, JSON, or both — §11), so
-`--report` values stay provisional.
+The `--report` option takes one or both of `junit` and `json`. `junit` writes
+JUnit XML, which CI systems read directly. `json` writes Battery's own detailed
+report (the `RunResult` from §9). The tool builds the JUnit writer first and the
+JSON writer next. Each format sits behind the `IReportWriter` seam (§8.3).
 
 The process exit code is `0` when every test passes. It is non-zero when any
 test fails or errors (FR-9.2).
@@ -531,7 +533,6 @@ and the API consumes Core (§8.2). None of them is a Phase 1 deliverable.
 
 ## 11. Open questions
 
-- **Report format(s)** — JUnit XML, custom JSON, or both?
 - **Multipart/file-upload scope** — how much to support in Phase 1 (FR-1.4).
 - **Definition discovery** — how suites are found on disk (convention vs
   explicit manifest).
@@ -562,3 +563,4 @@ and the API consumes Core (§8.2). None of them is a Phase 1 deliverable.
 | 2026-11-07 | Phase 1 body matchers: `equals`, `exists`, `contains`, `matches` | A small, useful set; grow later if needed |
 | 2026-11-07 | Defined §10 interfaces: the YAML schema, the environment file, and the `battery run` CLI surface | Gives the user the authoring and run contracts; maps directly to §9 |
 | 2026-11-07 | A secret resolves from an OS environment variable of the same name | Keeps secrets out of committed files (FR-5.3) without a second syntax |
+| 2026-11-07 | Report format: both JUnit XML and custom JSON via `--report`; build JUnit first | JUnit gives CI integration at once; JSON gives full detail for our tools and a future UI; both sit behind `IReportWriter` |
