@@ -186,25 +186,120 @@ High-level shape (to be refined):
   UI or CLI dependencies.
 - **`Battery.Cli`** — the first front-end; a thin layer that drives
   `Battery.Core`.
-- **`Battery.Tests`** — automated tests for the core and CLI.
-- _Future_ — additional UI front-ends consuming the same `Battery.Core`.
+- **`Battery.Tests`** — automated tests for the core and CLI (to live under a
+  top-level `tests/` directory).
+- _Future_ — `Battery.Api` (an HTTP projection of Core) and one or more UIs; the
+  UI consumes the API, the API consumes Core. Included in the design purely to
+  validate that Core supports multiple independent consumers — the API is **not**
+  a Phase 1 deliverable.
 
 **TBD** — concrete project/solution layout, key abstractions, extension points.
 
-## 8. Data model
+## 8. Conventions & principles
+
+How we build Battery. These are working rules, applied pragmatically.
+
+### 8.1 Working agreements
+
+- **Pragmatism over purity.** Follow established C# best practice and use design
+  patterns where they earn their place; prefer the simplest thing that meets the
+  requirement. Add structure on real need (a second implementation, a genuine
+  seam, a testability problem), not speculatively (**YAGNI**).
+- **Ambiguity triggers dialogue.** Where it's unclear whether a pattern or
+  abstraction applies, pause and confirm before committing to it.
+- **The spec is the source of truth.** Requirements and notable decisions live
+  here; the decision log (§12) is kept current.
+
+### 8.2 Architecture & layering
+
+- **Core is the single home of functionality.** `Battery.Core` holds all domain
+  logic — definition parsing, execution, assertions, variables, chaining,
+  results.
+- **Front-ends are thin adapters.** Each consumer (CLI now; API and UI later)
+  dips into Core and owns only its own concerns — the CLI owns argument parsing
+  and console rendering; the API owns endpoints, routing, and wire DTOs. No
+  domain logic lives in a front-end.
+- **Layering:** UI → API → Core. The UI talks to the API; the API talks to Core.
+- **Dependencies point inward.** Core depends on nothing app-specific and knows
+  nothing of Console, ASP.NET, or any UI. Front-ends depend on Core; never the
+  reverse.
+- **Core is library-first.** Its public surface is a deliberate, documented API;
+  internals stay `internal`.
+- **Front-ends translate.** A front-end maps to/from its own models rather than
+  exposing Core's internal types on its interface (e.g. the API doesn't
+  serialize Core internals onto the wire).
+
+### 8.3 Design & dependency injection
+
+- **Interfaces + DI for all behaviour; concrete records for data.** Services and
+  anything that *does* something or could vary/be faked are defined as
+  interfaces and composed via `Microsoft.Extensions.DependencyInjection`.
+  Value/data types (e.g. `TestDefinition`, `AssertionResult`, `RunResult`) stay
+  concrete records.
+- **When to introduce a seam:** either (a) multiple implementations are known
+  today, or (b) substitution is needed for tests. Otherwise stay concrete and
+  revisit via the ambiguity → dialogue rule.
+- **Known Phase 1 seams (provisional names):** `IAssertion`,
+  `IAuthenticationScheme`, `IReportWriter`, `IHttpExecutor` (testability),
+  `IClock` (deterministic timing), plus definition loading and variable
+  resolution. These follow the Strategy pattern where several kinds exist.
+- **Resolution** of a strategy from its YAML discriminator (e.g.
+  `type: status`) uses a simple internal registry/factory — **not** external
+  plugin/assembly loading, which is out of scope for Phase 1.
+- **Favour composition over inheritance; prefer immutability** for domain data.
+
+### 8.4 Coding standards
+
+- Follow **Microsoft's C# conventions** and the **.NET library design
+  guidelines**.
+- **Nullable reference types on**; **warnings-as-errors** (enforced in CI).
+- **Async all the way** for I/O, with `CancellationToken` threaded end-to-end.
+- Use **modern C# where it clarifies** — records, pattern matching,
+  expression-bodied members — not reflexively.
+- **Clarity over cleverness**; intention-revealing names; one primary type per
+  file.
+- **XML doc comments on Core's public API** (it is a real contract).
+- Conventions enforced via **`.editorconfig` + Roslyn analyzers + `dotnet
+  format`** in CI.
+
+### 8.5 Error handling
+
+- **Expected failures are outcome objects, not exceptions.** A failing assertion
+  or a non-2xx response under test flows back as a result (ties to FR-8.2).
+- **Exceptions are for genuine faults** — I/O failures, bugs, misconfiguration.
+- **Fail fast on bad definitions** with clear, located, actionable messages.
+
+### 8.6 Testing
+
+- **xUnit**, with tests under a top-level **`tests/`** directory.
+- **Core is fully unit-testable headless** (via `IHttpExecutor` etc.).
+- **Integration tests** drive the CLI/API against an in-process mock HTTP
+  server. _The exact integration-test approach is still to be refined (its own
+  topic)._
+- Tests are **deterministic and isolated**.
+
+### 8.7 Dependencies
+
+- **Lean on the BCL; justify every third-party package.**
+- Expected minimal set (provisional): `System.Text.Json` (data), a YAML library
+  (YamlDotNet likely), a JSONPath library (TBD), the DI/Hosting extensions, and
+  xUnit (test-only).
+- **Core stays lightweight** — no heavyweight frameworks pulled into it.
+
+## 9. Data model
 
 _Key entities — e.g. Suite, Test, Request, Assertion, Extraction, Environment,
 Variable, RunResult. To be defined._
 
 **TBD**
 
-## 9. Interfaces
+## 10. Interfaces
 
 - **CLI** — primary interface for Phase 1. Command surface TBD (see §5.10).
 - **YAML definition schema** — the authoring contract for suites/tests. TBD.
 - _Future_ — GUI / web / desktop front-ends.
 
-## 10. Open questions
+## 11. Open questions
 
 - **Assertion/extraction mechanism** — confirm JSONPath (vs a fuller expression
   language) for body matching. _Pending evaluation._
@@ -214,7 +309,7 @@ Variable, RunResult. To be defined._
 - **Definition discovery** — how suites are found on disk (convention vs
   explicit manifest).
 
-## 11. Decision log
+## 12. Decision log
 
 | Date       | Decision | Rationale |
 | ---------- | -------- | --------- |
@@ -226,3 +321,10 @@ Variable, RunResult. To be defined._
 | 2026-11-07 | Tests declarative; YAML for suite/test definitions, JSON for data payloads | Readable, diff-friendly authoring; JSON stays for structured data |
 | 2026-11-07 | Payload/data generation deferred to Phase 2 | Keep Phase 1 focused on a usable core |
 | 2026-11-07 | Defined Phase 1 functional requirement set (§5) | Scope the minimal usable API testing tool |
+| 2026-11-07 | Core-central layering: UI → API → Core; front-ends are thin adapters | Keep one home for functionality; support multiple consumers |
+| 2026-11-07 | `Battery.Api` is illustrative, deferred (not Phase 1) | Shows multi-consumer design without expanding Phase 1 scope |
+| 2026-11-07 | Interfaces + DI for behaviour; concrete records for data | Testability and pluggability where it matters, no ceremony for plain data |
+| 2026-11-07 | Seam only on known-plural or testability need (Strategy via internal registry) | Pragmatic abstraction; no speculative plugin system |
+| 2026-11-07 | Warnings-as-errors; nullable on; analyzers + `.editorconfig` in CI | Enforce quality automatically |
+| 2026-11-07 | Expected failures as outcome objects; exceptions for faults | Clean separation of test results from errors (FR-8.2) |
+| 2026-11-07 | xUnit; tests under top-level `tests/` | Standard .NET testing; clear separation from `src/` |
