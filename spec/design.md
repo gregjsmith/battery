@@ -289,10 +289,89 @@ How we build Battery. These are working rules, applied pragmatically.
 
 ## 9. Data model
 
-_Key entities — e.g. Suite, Test, Request, Assertion, Extraction, Environment,
-Variable, RunResult. To be defined._
+The model has two parts. The first part is the **authored definitions**. The
+engine reads these from YAML. They do not change after the engine reads them.
+They can hold `${var}` templates. The second part is the **result model**. A run
+produces it.
 
-**TBD**
+Some types have more than one kind (for example an assertion). A `type:`
+discriminator in the YAML names the kind. The internal Strategy registry (§8.3)
+selects the matching implementation (for example `IAssertion` or
+`IAuthenticationScheme`).
+
+All entities are immutable records.
+
+### 9.1 Authored definitions
+
+| Entity | Fields | Requirements |
+| ------ | ------ | ------------ |
+| `Suite` | name, `BaseConfig?`, ordered `IReadOnlyList<Test>`, tags, `Setup?`, `Teardown?` | FR-3.1, FR-3.4, FR-3.5 |
+| `BaseConfig` | base URL, common headers, default timeout, default auth | suite-level defaults |
+| `Test` | name, tags, `Request`, `IReadOnlyList<Assertion>`, `IReadOnlyList<Extraction>` | FR-2.2 |
+| `Request` | method, URL, query parameters, headers, `RequestBody?`, timeout, follow-redirects flag, `TlsOptions?`, `Auth?` | §5.1 |
+| `RequestBody` | one kind of: `JsonInline`, `JsonFile(path)`, `Form`, `Text`, `Multipart` | FR-1.3, FR-1.4 |
+| `Auth` | one kind of: `Bearer`, `Basic`, `ApiKey(location: header or query)` | §5.7 |
+| `Assertion` | one kind of: `Status`, `Header`, `Body(jsonPath, matcher, value)`, `ResponseTime` | §5.4 |
+| `Extraction` | name, source: `Body(jsonPath)`, `Header`, or `Status` | FR-6.1 |
+| `Environment` | name, map of variable names to values | FR-5.2 |
+
+A `Setup` and a `Teardown` each hold a `Request`, optional extractions, and
+optional assertions. They use the same shape as a `Test`.
+
+### 9.2 Result model
+
+| Entity | Fields |
+| ------ | ------ |
+| `AssertionResult` | the assertion, pass or fail, expected value, actual value, message |
+| `TestResult` | test name, outcome, `IReadOnlyList<AssertionResult>`, duration, error (if any) |
+| `SuiteResult` | suite name, `IReadOnlyList<TestResult>`, counts, duration |
+| `RunResult` | `IReadOnlyList<SuiteResult>`, totals, overall pass or fail |
+
+A `TestResult` has one of three outcomes:
+
+- `Passed` — every assertion passed.
+- `Failed` — the request completed, but at least one assertion did not pass.
+- `Errored` — the request did not complete (for example a transport fault).
+
+This split keeps assertion failures apart from faults (§8.5, FR-8.2).
+`RunResult` reports pass or fail for the whole run. The CLI maps a failed run to
+a non-zero exit code (FR-9.2).
+
+### 9.3 Variables and precedence
+
+A variable gets its value from one of five sources. When two sources set the
+same name, the stronger source wins. The order, from weakest to strongest, is:
+
+1. Suite defaults (from the suite file).
+2. Environment profile (for example `staging`).
+3. OS environment variables (for example `ALBUMS_PASSWORD`).
+4. Runtime overrides (for example `--set baseUrl=...`).
+5. Extracted values (from a response, for example `token`).
+
+An extracted value is the strongest. It wins over a runtime override. This order
+lets a chained value (such as a token from a login step) flow into later
+requests without a command-line change.
+
+### 9.4 Authored request and resolved request
+
+The engine keeps two request types:
+
+- `Request` — the authored template. It still holds `${var}` templates.
+- `ResolvedRequest` — the final request. The engine builds it after it fills
+  every template with a value from the precedence order in §9.3.
+
+The engine sends a `ResolvedRequest`. It does not send a `Request`. This split
+keeps the resolution step easy to test on its own.
+
+### 9.5 Body matchers
+
+A body assertion uses JSONPath to select a value. It then uses a matcher to
+check that value. Phase 1 supports four matchers:
+
+- `equals` — the value equals the expected value exactly.
+- `exists` — the field is present (the value does not matter).
+- `contains` — the value holds the expected text or item.
+- `matches` — the value fits a regular expression.
 
 ## 10. Interfaces
 
@@ -303,7 +382,6 @@ Variable, RunResult. To be defined._
 ## 11. Open questions
 
 - **Report format(s)** — JUnit XML, custom JSON, or both?
-- **Variable precedence** — confirm the exact scoping/override order.
 - **Multipart/file-upload scope** — how much to support in Phase 1 (FR-1.4).
 - **Definition discovery** — how suites are found on disk (convention vs
   explicit manifest).
@@ -328,3 +406,7 @@ Variable, RunResult. To be defined._
 | 2026-11-07 | Expected failures as outcome objects; exceptions for faults | Clean separation of test results from errors (FR-8.2) |
 | 2026-11-07 | xUnit; tests under top-level `tests/` | Standard .NET testing; clear separation from `src/` |
 | 2026-11-07 | JSONPath confirmed for body assertions/extraction; `JsonPath.Net` (json-everything) as the library | RFC 9535-compliant, native `System.Text.Json`, fits the lean-dependency rule (vs Newtonsoft `SelectToken`) |
+| 2026-11-07 | Defined the Core data model (§9): authored definitions and result model, all immutable records | Unblocks the engine design; ties each entity to a Phase 1 requirement |
+| 2026-11-07 | Variable precedence: suite < environment < OS env < runtime override < extracted (extracted wins) | A chained value flows into later requests without a command-line change |
+| 2026-11-07 | Separate `ResolvedRequest` from the authored `Request` | Keeps variable resolution a distinct, testable step |
+| 2026-11-07 | Phase 1 body matchers: `equals`, `exists`, `contains`, `matches` | A small, useful set; grow later if needed |
