@@ -102,7 +102,7 @@ Priority uses **Must** (required for Phase 1 to be done) and **Should**
 | -- | ----------- | -------- |
 | FR-4.1 | Assert on HTTP status code | Must |
 | FR-4.2 | Assert on response headers (presence and value) | Must |
-| FR-4.3 | Assert on response body values (matching mechanism provisional — JSONPath is the leading candidate) | Must |
+| FR-4.3 | Assert on response body values via **JSONPath** | Must |
 | FR-4.4 | Assert on response time against a threshold | Should |
 | FR-4.5 | Allow multiple assertions per test; report each assertion's pass/fail individually | Must |
 | FR-4.6 | Validate a response body against a JSON Schema | Phase 2 |
@@ -282,8 +282,9 @@ How we build Battery. These are working rules, applied pragmatically.
 
 - **Lean on the BCL; justify every third-party package.**
 - Expected minimal set (provisional): `System.Text.Json` (data), a YAML library
-  (YamlDotNet likely), a JSONPath library (TBD), the DI/Hosting extensions, and
-  xUnit (test-only).
+  (YamlDotNet likely), **`JsonPath.Net`** (json-everything suite — RFC 9535,
+  built on `System.Text.Json`) for body assertions/extraction, the DI/Hosting
+  extensions, and xUnit (test-only).
 - **Core stays lightweight** — no heavyweight frameworks pulled into it.
 
 ## 9. Data model
@@ -301,8 +302,6 @@ Variable, RunResult. To be defined._
 
 ## 11. Open questions
 
-- **Assertion/extraction mechanism** — confirm JSONPath (vs a fuller expression
-  language) for body matching. _Pending evaluation._
 - **Report format(s)** — JUnit XML, custom JSON, or both?
 - **Variable precedence** — confirm the exact scoping/override order.
 - **Multipart/file-upload scope** — how much to support in Phase 1 (FR-1.4).
@@ -328,3 +327,4 @@ Variable, RunResult. To be defined._
 | 2026-11-07 | Warnings-as-errors; nullable on; analyzers + `.editorconfig` in CI | Enforce quality automatically |
 | 2026-11-07 | Expected failures as outcome objects; exceptions for faults | Clean separation of test results from errors (FR-8.2) |
 | 2026-11-07 | xUnit; tests under top-level `tests/` | Standard .NET testing; clear separation from `src/` |
+| 2026-11-07 | JSONPath confirmed for body assertions/extraction; `JsonPath.Net` (json-everything) as the library | RFC 9535-compliant, native `System.Text.Json`, fits the lean-dependency rule (vs Newtonsoft `SelectToken`) |
