@@ -379,16 +379,67 @@ Phase 1 has two contracts for the user: the **YAML definition schema** (how the
 user writes tests) and the **CLI command surface** (how the user runs them).
 Both map to the data model in §9.
 
-### 10.1 File types
+### 10.1 Project layout, the config file, and discovery
+
+In real use the suites, data files, and environments live together in a **git
+repository**. One repository can hold many suites for many APIs. A **config
+file** describes a run. It points to the suites to run and holds the other run
+settings. This is the normal entry point.
+
+File types:
 
 | File | Format | Holds |
 | ---- | ------ | ----- |
+| Config file | YAML | one run: the suites to run and the run settings |
 | Suite file | YAML | one `Suite`: its config, setup/teardown, and tests |
-| Environment file | YAML | named `Environment` profiles |
+| Environment file | YAML | one `Environment` profile |
 | Data file | JSON | a request body referenced by `jsonFile` (FR-2.3) |
 
-A suite file name uses the convention `*.suite.yaml` (provisional — the
-discovery rule is an open question in §11).
+**The config file.** It declares where the suites and the environments live,
+which suites to run, and the run defaults:
+
+```yaml
+# battery.yaml
+suitesRoot: ./suites
+environmentsRoot: ./environments
+defaultEnvironment: staging
+
+report:
+  formats: [junit, json]
+  output: ./out
+
+run:                 # a list of selectors (see below)
+  - albums           # all album suites, recursively
+  - billing/payments # one suite
+```
+
+A CLI flag overrides any setting in this file for a single run (§10.6).
+
+**How the tool recognises a suite.** A file is a suite only when both are true:
+its name ends in `.suite.yaml`, and it has the top-level `suite:` key. A
+directory scan reads only `*.suite.yaml` files and ignores the rest, so a mixed
+folder is fine. A `*.suite.yaml` file that does not parse as a valid suite stops
+the run at once with a located error (FR-2.5, §8.5).
+
+**Selectors.** A selector names what to run, relative to `suitesRoot`. It uses
+slashes, like the folder layout:
+
+- A selector that names a **directory** runs every suite beneath it, recursively.
+- A selector that names a **suite** (its path without the `.suite.yaml` suffix)
+  runs that one suite.
+
+| Selector | Runs (root = `suites/`) |
+| -------- | ----------------------- |
+| `albums` | every suite under `suites/albums/**` |
+| `albums/70s` | every suite under `suites/albums/70s/**` |
+| `albums/70s/steely-dan` | the suite `suites/albums/70s/steely-dan.suite.yaml` |
+
+The `run` list in the config file is a list of selectors. The `--select` flag
+overrides that list for one run (§10.6). If a selector matches no suite, the
+tool errors.
+
+**Run order.** The run is repeatable. The `run` list sets the order between
+selectors, and a directory runs its suites in path-name order (FR-8.1).
 
 ### 10.2 Suite file schema
 
@@ -475,21 +526,24 @@ anywhere in a request or an assertion (FR-5.1). The engine resolves each
 variable by the precedence order in §9.3. If a variable has no value, the engine
 reports a located validation error (FR-2.5).
 
-### 10.4 Environment file schema
+### 10.4 Environment files
 
-Each top-level key is a profile name. Each profile maps variable names to
-values:
+Each environment profile is its own file, named `<name>.yaml`, under
+`environmentsRoot`. The file maps variable names to values. For example
+`environments/staging.yaml`:
 
 ```yaml
-staging:
-  baseUrl: https://staging.albums.example.com
-  username: tester
+baseUrl: https://staging.albums.example.com
+username: tester
 ```
 
-The user selects a profile at run time with `--env` (FR-5.2). A secret has no
-value in the file. Instead the engine reads it from an OS environment variable
-of the same name (FR-5.3). So `${ALBUMS_PASSWORD}` resolves from the OS when no
-file sets it.
+The config file names the default environment (`defaultEnvironment`). The
+`--env <name>` flag selects a different one for a single run (FR-5.2). The
+config holds the name only; the tool finds the file by convention.
+
+A secret has no value in the file. Instead the engine reads it from an OS
+environment variable of the same name (FR-5.3). So `${ALBUMS_PASSWORD}` resolves
+from the OS when no file sets it.
 
 ### 10.5 Validation
 
@@ -499,16 +553,25 @@ message with the file, the location, and the problem, then stops (FR-2.5,
 
 ### 10.6 CLI command surface
 
-The CLI follows §5.10. The main command is `run`:
+The CLI follows §5.10. The main command is `run`. It has two entry points:
 
 ```
-battery run <path> [options]
+battery run [--config <path>]      # the normal path: read a config file
+battery run --suite <path>         # run one suite file directly
 ```
 
-`<path>` is a file or a directory of YAML definitions (FR-10.1).
+By default `battery run` reads `battery.yaml` in the current folder. `--config`
+points to another config file. `--suite` runs a single suite file for quick
+local testing; it skips the `run` list, but still reads the config for the
+environment and report defaults when a config is present (FR-10.1).
+
+Options (a flag overrides the matching setting in the config file):
 
 | Option | Effect | Requirement |
 | ------ | ------ | ----------- |
+| `--config <path>` | the config file to read | FR-10.1 |
+| `--suite <path>` | run one suite file directly | FR-10.1 |
+| `--select <selector>` | override the `run` list (repeatable) | FR-3.2 |
 | `--env <name>` | select an environment profile | FR-5.2 |
 | `--tag <tag>` / `--filter <expr>` | run only the matching tests | FR-3.3 |
 | `--set <key=value>` | override a variable (repeatable) | FR-5.1 |
@@ -534,8 +597,6 @@ and the API consumes Core (§8.2). None of them is a Phase 1 deliverable.
 ## 11. Open questions
 
 - **Multipart/file-upload scope** — how much to support in Phase 1 (FR-1.4).
-- **Definition discovery** — how suites are found on disk (convention vs
-  explicit manifest).
 
 ## 12. Decision log
 
@@ -564,3 +625,7 @@ and the API consumes Core (§8.2). None of them is a Phase 1 deliverable.
 | 2026-11-07 | Defined §10 interfaces: the YAML schema, the environment file, and the `battery run` CLI surface | Gives the user the authoring and run contracts; maps directly to §9 |
 | 2026-11-07 | A secret resolves from an OS environment variable of the same name | Keeps secrets out of committed files (FR-5.3) without a second syntax |
 | 2026-11-07 | Report format: both JUnit XML and custom JSON via `--report`; build JUnit first | JUnit gives CI integration at once; JSON gives full detail for our tools and a future UI; both sit behind `IReportWriter` |
+| 2026-11-07 | A run is driven by a YAML config file (suitesRoot, environmentsRoot, defaultEnvironment, report, run list); CLI flags override | A repo holds many suites for many APIs; one file captures a run and keeps CI settings in the repo |
+| 2026-11-07 | Convention-based discovery: a suite is a `*.suite.yaml` file with a `suite:` key; slash selectors under `suitesRoot`; a directory selector recurses | Low ceremony; mirrors the folder layout; fails fast on an unrecognised or empty match |
+| 2026-11-07 | One environment file per profile, `<name>.yaml` under `environmentsRoot`; the config names it, convention locates it | Keeps each environment separate and the config short |
+| 2026-11-07 | Two CLI entry points: a config file (default), or `--suite <path>` for one suite | The config file is the real-world path; a direct single-suite run helps local development |
