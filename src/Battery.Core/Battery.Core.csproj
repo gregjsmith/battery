@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>Battery.Core</RootNamespace>
+    <!-- Core's public API is a real contract (section 8.4), so it ships XML docs. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Tests may exercise internal types (section 8.6). -->
+    <InternalsVisibleTo Include="Battery.Core.Tests" />
+  </ItemGroup>
+
+</Project>

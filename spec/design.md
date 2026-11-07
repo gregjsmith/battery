@@ -194,7 +194,12 @@ High-level shape (to be refined):
   validate that Core supports multiple independent consumers — the API is **not**
   a Phase 1 deliverable.
 
-**TBD** — concrete project/solution layout, key abstractions, extension points.
+The solution layout is scaffolded: `src/Battery.Core` (the engine library),
+`src/Battery.Cli` (the front-end, which references Core), and xUnit test
+projects under `tests/` (`Battery.Core.Tests`, `Battery.Cli.Tests`). Shared
+build rules live in `Directory.Build.props` and `.editorconfig` (§8.4). The key
+abstractions and extension points are in §8.3, §9, and §10. No engine logic
+exists yet — the projects hold placeholder types only.
 
 ## 8. Conventions & principles
 
