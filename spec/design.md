@@ -72,9 +72,10 @@ Priority uses **Must** (required for Phase 1 to be done) and **Should**
 | FR-1.1 | Issue HTTP requests with any method (GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS) | Must |
 | FR-1.2 | Configure URL, path, query parameters, and headers per request | Must |
 | FR-1.3 | Send JSON request bodies, sourced inline or from a referenced JSON data file | Must |
-| FR-1.4 | Support form-urlencoded, raw/text, and multipart/file-upload bodies | Should |
+| FR-1.4 | Support form-urlencoded and raw/text bodies | Should |
 | FR-1.5 | Configure per-request timeout and redirect-following behaviour | Must |
 | FR-1.6 | TLS options for testing (e.g. allow self-signed certificates) | Should |
+| FR-1.7 | Support multipart / file-upload bodies | Phase 2 (Should) |
 
 ### 5.2 Declarative test definitions
 
@@ -309,7 +310,7 @@ All entities are immutable records.
 | `BaseConfig` | base URL, common headers, default timeout, default auth | suite-level defaults |
 | `Test` | name, tags, `Request`, `IReadOnlyList<Assertion>`, `IReadOnlyList<Extraction>` | FR-2.2 |
 | `Request` | method, URL, query parameters, headers, `RequestBody?`, timeout, follow-redirects flag, `TlsOptions?`, `Auth?` | §5.1 |
-| `RequestBody` | one kind of: `JsonInline`, `JsonFile(path)`, `Form`, `Text`, `Multipart` | FR-1.3, FR-1.4 |
+| `RequestBody` | one kind of: `JsonInline`, `JsonFile(path)`, `Form`, `Text`; `Multipart` is Phase 2 | FR-1.3, FR-1.4, FR-1.7 |
 | `Auth` | one kind of: `Bearer`, `Basic`, `ApiKey(location: header or query)` | §5.7 |
 | `Assertion` | one kind of: `Status`, `Header`, `Body(jsonPath, matcher, value)`, `ResponseTime` | §5.4 |
 | `Extraction` | name, source: `Body(jsonPath)`, `Header`, or `Status` | FR-6.1 |
@@ -491,7 +492,7 @@ A **`request`** maps to `Request`:
 | `jsonFile` | a path to a `.json` data file |
 | `form` | a map, sent as form-urlencoded |
 | `text` | a raw string |
-| `multipart` | a list of parts (Phase 1 scope is open, FR-1.4) |
+| `multipart` | a list of parts — deferred to Phase 2 (FR-1.7) |
 
 **`auth`** uses a `type` discriminator:
 
@@ -596,7 +597,8 @@ and the API consumes Core (§8.2). None of them is a Phase 1 deliverable.
 
 ## 11. Open questions
 
-- **Multipart/file-upload scope** — how much to support in Phase 1 (FR-1.4).
+No open questions remain for the Phase 1 design. New questions will be added
+here as they arise.
 
 ## 12. Decision log
 
@@ -629,3 +631,4 @@ and the API consumes Core (§8.2). None of them is a Phase 1 deliverable.
 | 2026-11-07 | Convention-based discovery: a suite is a `*.suite.yaml` file with a `suite:` key; slash selectors under `suitesRoot`; a directory selector recurses | Low ceremony; mirrors the folder layout; fails fast on an unrecognised or empty match |
 | 2026-11-07 | One environment file per profile, `<name>.yaml` under `environmentsRoot`; the config names it, convention locates it | Keeps each environment separate and the config short |
 | 2026-11-07 | Two CLI entry points: a config file (default), or `--suite <path>` for one suite | The config file is the real-world path; a direct single-suite run helps local development |
+| 2026-11-07 | Multipart / file-upload deferred entirely to Phase 2 (kept as a Should, FR-1.7) | Not needed for a usable Phase 1; form-urlencoded and raw/text bodies stay in Phase 1 |
