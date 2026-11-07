@@ -375,9 +375,159 @@ check that value. Phase 1 supports four matchers:
 
 ## 10. Interfaces
 
-- **CLI** — primary interface for Phase 1. Command surface TBD (see §5.10).
-- **YAML definition schema** — the authoring contract for suites/tests. TBD.
-- _Future_ — GUI / web / desktop front-ends.
+Phase 1 has two contracts for the user: the **YAML definition schema** (how the
+user writes tests) and the **CLI command surface** (how the user runs them).
+Both map to the data model in §9.
+
+### 10.1 File types
+
+| File | Format | Holds |
+| ---- | ------ | ----- |
+| Suite file | YAML | one `Suite`: its config, setup/teardown, and tests |
+| Environment file | YAML | named `Environment` profiles |
+| Data file | JSON | a request body referenced by `jsonFile` (FR-2.3) |
+
+A suite file name uses the convention `*.suite.yaml` (provisional — the
+discovery rule is an open question in §11).
+
+### 10.2 Suite file schema
+
+The top-level keys of a suite file map to `Suite`:
+
+| Key | Required | Maps to |
+| --- | -------- | ------- |
+| `suite` | yes | the suite name |
+| `baseConfig` | no | `BaseConfig` (shared defaults) |
+| `setup` | no | a step that runs before the tests |
+| `teardown` | no | a step that runs after the tests |
+| `tests` | yes | an ordered list of `Test` |
+
+**`baseConfig`** holds `baseUrl`, `headers` (a map), `timeout`, and `auth`. A
+test inherits these and can override them.
+
+A **`setup`** or **`teardown`** step uses the same keys as a test (`request`,
+`extract`, `assert`). A setup step often logs in and extracts a token.
+
+A **`Test`** has these keys:
+
+| Key | Required | Maps to |
+| --- | -------- | ------- |
+| `name` | yes | the test name |
+| `tags` | no | a list of tags (for filtering, FR-3.3) |
+| `request` | yes | `Request` |
+| `extract` | no | a list of `Extraction` |
+| `assert` | no | a list of `Assertion` |
+
+A **`request`** maps to `Request`:
+
+| Key | Maps to |
+| --- | ------- |
+| `method` | the HTTP method (GET, POST, …) |
+| `url` | a path (joined to `baseUrl`) or an absolute URL |
+| `query` | a map of query parameters |
+| `headers` | a map of headers |
+| `body` | `RequestBody` (see below) |
+| `timeout` | a duration, for example `10s` |
+| `followRedirects` | `true` or `false` |
+| `tls` | TLS options, for example `allowSelfSigned: true` (FR-1.6) |
+| `auth` | `Auth` (see below) |
+
+**`body`** uses one key to select the `RequestBody` kind:
+
+| Key | Kind |
+| --- | ---- |
+| `jsonInline` | a JSON object written in the file |
+| `jsonFile` | a path to a `.json` data file |
+| `form` | a map, sent as form-urlencoded |
+| `text` | a raw string |
+| `multipart` | a list of parts (Phase 1 scope is open, FR-1.4) |
+
+**`auth`** uses a `type` discriminator:
+
+| `type` | Other keys |
+| ------ | ---------- |
+| `bearer` | `token` |
+| `basic` | `username`, `password` |
+| `apiKey` | `name`, `in` (`header` or `query`), `value` |
+
+**`assert`** is a list. Each item uses a `type` discriminator:
+
+| `type` | Other keys |
+| ------ | ---------- |
+| `status` | `equals` (a number) or `in` (a list of numbers) |
+| `header` | `name`, and one of `equals`, `exists`, or `matches` |
+| `body` | `jsonPath`, `matcher` (`equals`, `exists`, `contains`, `matches`), and `value` (not needed for `exists`) |
+| `responseTime` | `under` (a duration, for example `500ms`) |
+
+**`extract`** is a list. Each item sets a variable:
+
+| Key | Meaning |
+| --- | ------- |
+| `name` | the variable name to set |
+| `from` | `body`, `header`, or `status` |
+| `jsonPath` | the path (when `from` is `body`) |
+| `header` | the header name (when `from` is `header`) |
+
+### 10.3 Variable interpolation
+
+A string value can hold a variable in the form `${name}`. The user can use it
+anywhere in a request or an assertion (FR-5.1). The engine resolves each
+variable by the precedence order in §9.3. If a variable has no value, the engine
+reports a located validation error (FR-2.5).
+
+### 10.4 Environment file schema
+
+Each top-level key is a profile name. Each profile maps variable names to
+values:
+
+```yaml
+staging:
+  baseUrl: https://staging.albums.example.com
+  username: tester
+```
+
+The user selects a profile at run time with `--env` (FR-5.2). A secret has no
+value in the file. Instead the engine reads it from an OS environment variable
+of the same name (FR-5.3). So `${ALBUMS_PASSWORD}` resolves from the OS when no
+file sets it.
+
+### 10.5 Validation
+
+The loader checks the structure before the run. On bad input it reports a clear
+message with the file, the location, and the problem, then stops (FR-2.5,
+§8.5). It does not run a partial suite.
+
+### 10.6 CLI command surface
+
+The CLI follows §5.10. The main command is `run`:
+
+```
+battery run <path> [options]
+```
+
+`<path>` is a file or a directory of YAML definitions (FR-10.1).
+
+| Option | Effect | Requirement |
+| ------ | ------ | ----------- |
+| `--env <name>` | select an environment profile | FR-5.2 |
+| `--tag <tag>` / `--filter <expr>` | run only the matching tests | FR-3.3 |
+| `--set <key=value>` | override a variable (repeatable) | FR-5.1 |
+| `--verbosity <quiet\|normal\|verbose>` | set the output level | FR-9.5 |
+| `--report <format>` | write a machine-readable report | FR-9.4 |
+| `--output <path>` | the report file path | FR-9.4 |
+| `--stop-on-failure` | stop at the first failure | FR-8.3 |
+| `--help` | show usage | FR-10.3 |
+
+The report format is an open question (JUnit XML, JSON, or both — §11), so
+`--report` values stay provisional.
+
+The process exit code is `0` when every test passes. It is non-zero when any
+test fails or errors (FR-9.2).
+
+### 10.7 Future front-ends
+
+A GUI, web, or desktop front-end comes in Phase 3. Each one consumes the API,
+and the API consumes Core (§8.2). None of them is a Phase 1 deliverable.
 
 ## 11. Open questions
 
@@ -410,3 +560,5 @@ check that value. Phase 1 supports four matchers:
 | 2026-11-07 | Variable precedence: suite < environment < OS env < runtime override < extracted (extracted wins) | A chained value flows into later requests without a command-line change |
 | 2026-11-07 | Separate `ResolvedRequest` from the authored `Request` | Keeps variable resolution a distinct, testable step |
 | 2026-11-07 | Phase 1 body matchers: `equals`, `exists`, `contains`, `matches` | A small, useful set; grow later if needed |
+| 2026-11-07 | Defined §10 interfaces: the YAML schema, the environment file, and the `battery run` CLI surface | Gives the user the authoring and run contracts; maps directly to §9 |
+| 2026-11-07 | A secret resolves from an OS environment variable of the same name | Keeps secrets out of committed files (FR-5.3) without a second syntax |
