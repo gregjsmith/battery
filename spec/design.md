@@ -637,3 +637,8 @@ here as they arise.
 | 2026-11-07 | One environment file per profile, `<name>.yaml` under `environmentsRoot`; the config names it, convention locates it | Keeps each environment separate and the config short |
 | 2026-11-07 | Two CLI entry points: a config file (default), or `--suite <path>` for one suite | The config file is the real-world path; a direct single-suite run helps local development |
 | 2026-11-07 | Multipart / file-upload deferred entirely to Phase 2 (kept as a Should, FR-1.7) | Not needed for a usable Phase 1; form-urlencoded and raw/text bodies stay in Phase 1 |
+| 2026-11-08 | Built the section 9 data model in `Battery.Core` (namespaces `Definitions` and `Results`) as init-only records with `required` members; collections default to empty | A concrete base for the YAML loader; no null collections for consumers or tests |
+| 2026-11-08 | Each "one kind of" family (`RequestBody`, `Auth`, `Assertion`, `ExtractionSource`) is an abstract base record with sealed derived records | A `switch` covers the kinds; it fits the Strategy registry (section 8.3) later |
+| 2026-11-08 | Result counts and the overall pass flag are computed from the child lists, not stored | The totals cannot drift from the results |
+| 2026-11-08 | Renamed to avoid clashes: `EnvironmentProfile` (not `Environment`), `RequestMethod` (not `HttpMethod`), status assertion fields `ExpectedStatus` / `AllowedStatuses` (not `Equals` / `In`) | Keeps clear of `System.Environment`, `System.Net.Http.HttpMethod`, and the record `Equals` method |
+| 2026-11-08 | Data model stays BCL-only; a JSONPath is a `string` and `jsonInline` is a `JsonNode` | The JSONPath library is needed only when the matcher runs, not at the data layer |
