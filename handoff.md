@@ -1,90 +1,85 @@
 # Battery — Session Handoff
 
-> Last saved: 2026-11-07 · Session: https://claude.ai/code/session_01MHnRgUvYi9EWy1Uxt2cr4g
+> Last saved: 2026-11-09 · Session: https://claude.ai/code/session_01MHnRgUrSu6iAJ7yt7dFApe
 
 ## Stopping point
-Battery (an **API testing toolkit** in C#/.NET — "battery of tests", not
-electrical) has a **complete Phase 1 design** and a **compiling project
-skeleton**. `spec/design.md` §11 holds no open questions. This session finished
-the design (data model, interfaces) and then scaffolded the solution:
-`Battery.Core`, two xUnit test projects, and shared build rules. No engine logic
-exists yet — the projects hold placeholder types only. The build is **not yet
-verified**, because `dotnet` is not installed in this cloud session; the user
-builds in their **Codespaces**. The working tree is clean; all work is on
-**`main`**.
+Phase 1 now has a **built data model** and a **locked loader plan**. This session
+built the §9 data model in `Battery.Core` as immutable records with unit tests,
+then wrote and locked the **YAML loader implementation spec**
+(`spec/yaml-loader.md`). No loader code exists yet. The build is **not verified
+here** — this cloud session has no `dotnet`; the user builds in **Codespaces** on
+the .NET 10 SDK. All work is on branch **`claude/sleepy-cerf-uvvy54`**, which is
+pushed and open as **PR #1** (https://github.com/gregjsmith/battery/pull/1). The
+working tree is clean.
 
 ## Work completed this session
-- Confirmed **JSONPath** (`JsonPath.Net`, json-everything) for body assertions
-  and extraction — `352054b`.
-- Added **`CLAUDE.md`**: write every sentence in **Simplified Technical English
-  (STE)** — `0d4fb74`.
-- Defined the **Core data model (§9)**: authored definitions and result model,
-  all immutable records — `cb587bb`.
-- **Consolidated the repo to `main`** and deleted two parallel session branches
-  (`adoring-cannon`, `trusting-hawking`). A duplicate JSONPath commit and a
-  stale handoff update were dropped on purpose — `176b100`. (The user deleted
-  the remote branches; this session's token could not.)
-- Defined **§10 interfaces** — `5ab56cb` — then settled the **report format**
-  (both JUnit XML and JSON, JUnit first) — `3b2b687`.
-- Reworked §10 for a **config-file-driven run** and **convention-based
-  discovery** — `3c93ead`.
-- Deferred **multipart** to Phase 2 and closed the Phase 1 open questions —
-  `0c42d22`.
-- **Scaffolded** `Battery.Core` + `tests/` + `Directory.Build.props` +
-  `.editorconfig`; the CLI now references Core — `7bd9c4a`.
+- Built the **§9 data model** in `Battery.Core` across six commits
+  (`28de5ed`..`fe2d780`): value types and enums; `Request` with body and auth
+  kinds; assertion and extraction kinds; `Suite`/`BaseConfig`/`Test`/`Step`/
+  `EnvironmentProfile`; the result model with computed rollups; then removed the
+  `CoreInfo` placeholder and its test.
+- Added unit tests for all of the above (kinds, empty-collection defaults,
+  equality/`with`, and the result rollups).
+- Logged the Part 1 record decisions in `spec/design.md` §12 — `b698078`.
+- Wrote and locked `spec/yaml-loader.md`, the suite-loader build contract —
+  `986e182`.
+- The user created **PR #1** from the Claude Code UI for this branch. Do not open
+  another; pushes to the branch update it.
 
 ## Key decisions
-- **JSONPath** is confirmed; **`JsonPath.Net`** is the library.
-- **STE** is the writing standard for all prose (chat, commits, docs, comments).
-- **Data model**: variable precedence is suite < environment < OS env < runtime
-  override < **extracted** (extracted wins); two request types (`Request`
-  template → `ResolvedRequest`); body matchers `equals`, `exists`, `contains`,
-  `matches`.
-- **A run is driven by a YAML config file** (`suitesRoot`, `environmentsRoot`,
-  `defaultEnvironment`, `report`, a `run` list of selectors). CLI flags override.
-- **Discovery is by convention**: a suite is a `*.suite.yaml` file with a
-  `suite:` key; **slash selectors** under `suitesRoot`; a directory selector
-  recurses. One environment file per profile, `<name>.yaml` under
-  `environmentsRoot`.
-- **CLI**: default entry is the config file; `--suite <path>` runs one suite.
-- **Report**: both JUnit XML and JSON via `--report`; build JUnit first.
-- **Multipart** is deferred to Phase 2 (kept as a Should, FR-1.7).
-- Earlier decisions still hold: UI → API → Core; interfaces + DI for behaviour,
-  records for data; warnings-as-errors; xUnit under `tests/`; target .NET 10.
+- **Data model**: init-only records with `required` members; collections default
+  to `[]`. Each "one kind of" family (`RequestBody`, `Auth`, `Assertion`,
+  `ExtractionSource`) is an abstract base record with sealed derived records.
+  Result counts and overall pass are computed, not stored. Renames avoid clashes:
+  `EnvironmentProfile`, `RequestMethod`, status fields `ExpectedStatus`/
+  `AllowedStatuses`. Data layer stays BCL-only (a JSONPath is a `string`;
+  `jsonInline` is a `JsonNode`).
+- **YAML loader (locked, D1–D8 in the spec)**: parse the **YamlDotNet DOM** and
+  hand-map (not POCO deserialization); return a **`LoadResult<T>`** with **many
+  located errors**; **reject unknown keys** (strict); store the **`jsonFile`
+  path only**; **minimal `jsonInline` type inference**; **build the suite loader
+  first**; add **`YamlDotNet`** to Core; **async** disk entry point, sync
+  `Parse`.
 
 ## Relevant files
-- `spec/design.md` — the source of truth. §5 requirements, §7 architecture (now
-  names the real layout), §8 conventions, §9 data model, §10 interfaces, §11 (no
-  open questions), §12 decision log.
-- `CLAUDE.md` — the STE writing rule.
+- `spec/design.md` — the master design. §9 data model, §10 interfaces/schema,
+  §12 decision log (now includes the Part 1 record decisions).
+- `spec/yaml-loader.md` — the **locked** suite-loader spec. Self-contained build
+  contract: the 8 decisions, the full key-to-record schema map, the reader
+  substrate, discriminator dispatch, duration grammar, `jsonInline` converter,
+  error semantics, tests, and the four build increments. **Start here for the
+  loader.**
+- `src/Battery.Core/Definitions/` — the authored model (26 record/enum files).
+- `src/Battery.Core/Results/` — the result model (`AssertionResult`,
+  `TestResult`, `SuiteResult`, `RunResult`, `TestOutcome`).
+- `tests/Battery.Core.Tests/Definitions/` and `.../Results/` — xUnit tests.
 - `Directory.Build.props` — net10.0, nullable, warnings-as-errors, analyzers.
-- `.editorconfig` — style baseline; rules are at `suggestion` severity for now,
-  so the empty scaffold builds clean. Tighten to `warning` as code lands.
-- `src/Battery.Core/` — the engine library; `CoreInfo.cs` is a placeholder.
-- `src/Battery.Cli/` — the front-end; references Core; still prints "Hello World".
-- `tests/Battery.Core.Tests/`, `tests/Battery.Cli.Tests/` — xUnit; placeholder
-  tests only. Test package versions are provisional.
-- `Battery.sln` — now holds all four projects.
+- `.editorconfig` — style rules at `suggestion` severity for now.
 
 ## Next best step
-**Build the first real engine slice: the §9 data-model records in
-`Battery.Core`** (`Suite`, `Test`, `Request`, `RequestBody`, `Auth`, `Assertion`,
-`Extraction`, `Environment`, plus the result records), with unit tests. This
-gives a concrete base for the YAML loader next.
+**Implement YAML loader increment 1**: `LoadResult<T>` + `LoadError` + the
+`YamlReader` substrate + `DurationParser`, with unit tests, and add the
+`YamlDotNet` package to `Battery.Core`. Follow `spec/yaml-loader.md` §14.
 
 Alternatives / follow-ups:
-- **First**, the user runs the Codespaces build and reports any restore or
-  analyzer errors, so this session's scaffold is confirmed clean.
-- Design or build the **YAML loader** (parse + validate, FR-2.5) after the records.
-- Refine the **integration-test approach** (§8.6: in-process host vs. WireMock.Net).
+- **The user verifies the Codespaces build** of the data model (restore, build,
+  test) and reports any analyzer errors, so the current code is confirmed clean.
+- Decide what to do about **stale `main`** (fast-forward to the branch, or merge
+  PR #1).
+- After the loader: the environment loader, then the config loader plus
+  discovery; then the variable resolver (`ResolvedRequest`).
 
 ## Open questions / notes
-- **Phase 1 design has no open questions** (§11). New questions go there.
-- **The scaffold is unbuilt here.** `dotnet` is not installed in the cloud
-  session. The user must `dotnet restore` + `dotnet build` in Codespaces on the
-  **.NET 10 SDK**. Watch for: test package versions, analyzer rules under
-  warnings-as-errors.
-- **No feature branches now.** Work goes on `main`, or on a new branch the user
-  asks for. This session's token cannot delete remote branches (403); the user
-  does that.
-- **Git workflow**: commit and push on every change (the project convention).
+- **The code is unbuilt here.** `dotnet` is not installed in the cloud session.
+  Build in Codespaces on .NET 10. Watch for **CA2227** (collection properties
+  should be read-only) on the `get; init;` members under warnings-as-errors — if
+  it fires, the fix is a targeted `.editorconfig` severity line, not a code
+  change.
+- **`main` is ~10 commits behind** this branch; the branch (not `main`) holds all
+  real work. An earlier handoff wrongly said the work was on `main`.
+- **PR #1 is this branch's PR.** Reference it; do not create another.
+- **Two soft spots flagged in the loader spec**: (1) suite-level `tags` — §9.1
+  gives `Suite` a `tags` field but §10.2 omits the key; the spec supports it. (2)
+  the `AddBatteryCore` DI hook — the one piece not covered by D1–D8; kept, but
+  droppable if DI is wired from the CLI later.
+- **Git workflow**: commit and push on every change (project convention).
